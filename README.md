@@ -4,7 +4,7 @@ This guide describes how-to setup Open Source tooling and intelligence for local
 # Prerequisites
 
 ## My hardware set-up 
-* Apple Mac Studio as front-end (can be an desktop or laptop computer with any OS that 
+* Apple Mac Studio as front-end (can be an desktop or laptop computer with any OS)
 * ASUS Ascent GX10 as AI backend for "Agent Code" and "Agent Test" (Nvidia GB10 Grace Blackwell 128GB VRAM)
 * Lenovo ThinkStation PGX GB10 as AI backend for "Agent Architect" (Nvidia GB10 Grace Blackwell 128GB VRAM)
 

@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker
+*.tar.gz
+build.log
+
+# Environment
+.env
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model cache (don't commit large files)
+models/
+cache/
+*.safetensors
+*.bin
+*.pth
+
+# Personal configs
+docker-compose.yml
+docker-compose.override.yml

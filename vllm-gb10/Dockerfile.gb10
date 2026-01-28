@@ -1,0 +1,55 @@
+# Start from vLLM's official nightly build which has PyTorch 2.9.1 pre-installed
+FROM vllm/vllm-openai:nightly
+
+# Switch to root to install dependencies
+USER root
+
+# Create vllm user if it doesn't exist
+RUN id -u vllm &>/dev/null || useradd -m -u 1000 -s /bin/bash vllm
+
+# Install full CUDA toolkit (needed for nvcc and nvrtc during compilation)
+RUN apt-get update && apt-get install -y \
+    git \
+    libnuma-dev \
+    cuda-toolkit-12-4 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install transformers from main branch (for GLM-4.7-Flash glm4_moe_lite support)
+RUN pip3 install --no-cache-dir git+https://github.com/huggingface/transformers.git@main
+
+# Copy the GB10-patched vLLM source
+WORKDIR /workspace/vllm-gb10
+COPY . .
+
+# Set environment variables for the entire build process
+ENV VLLM_VERSION_OVERRIDE="0.14.0+gb10"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION="0.14.0+gb10"
+ENV VLLM_INSTALL_PUNICA_KERNELS=1
+ENV MAX_JOBS=16
+ENV NVCC_THREADS=16
+ENV CMAKE_BUILD_PARALLEL_LEVEL=16
+ENV VLLM_TARGET_DEVICE=cuda
+ENV CUDA_HOME=/usr/local/cuda-12.4
+ENV CUDA_PATH=/usr/local/cuda-12.4
+ENV PATH=/usr/local/cuda-12.4/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:${LD_LIBRARY_PATH}
+ENV LIBRARY_PATH=/usr/local/cuda-12.4/lib64:${LIBRARY_PATH}
+ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0 12.1"
+
+# Install build dependencies manually to avoid isolated build
+RUN pip3 install --no-cache-dir ninja cmake wheel setuptools-scm
+
+# Uninstall the existing vLLM and install the GB10-patched version with --no-build-isolation
+RUN pip3 uninstall -y vllm && pip3 install --no-cache-dir --no-build-isolation -v .
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch back to vllm user for security
+USER vllm
+
+# Expose port
+EXPOSE 8000
+
+# Default command
+CMD ["python3", "-m", "vllm.entrypoints.openai.api_server"]

@@ -119,11 +119,40 @@ ssh pegasus-llm    # Pegasus (as llm-agent)
 ssh stella-llm     # Stella (as llm-agent)
 ```
 
+## Model IDs (for API calls)
+
+vLLM uses full paths as model IDs:
+- **Pegasus**: `/models/models--openai--gpt-oss-120b/snapshots/b5c939de8f754692c1647ca79fbf85e8c1e70f8a`
+- **Stella**: `/models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120`
+
+Query available models: `curl http://<host>:8000/v1/models`
+
+## OpenCode Integration
+
+Models configured in `~/.config/opencode/opencode.json` using `@ai-sdk/openai-compatible` provider.
+
+## Maintenance Commands
+
+**Docker cleanup (free disk space):**
+```bash
+docker image prune -a -f       # Remove unused images
+docker builder prune -a -f     # Clear build cache
+docker container prune -f      # Remove stopped containers
+docker system df               # Check disk usage
+```
+
+**NFS mount (if not in fstab):**
+```bash
+sudo mount -t nfs4 flashstore.home.arpa:/volume1/models /mnt/models \
+  -o rw,hard,intr,_netdev,noatime,nofail,rsize=1048576,wsize=1048576
+```
+
 ## Known Issues
 
 - GB10 requires specific vLLM builds (standard NVIDIA containers may hang at "Using Marlin backend")
 - GDS (GPU Direct Storage) not supported on these platforms
 - Stella's Hermes tool calling format requires custom parsing (not direct OpenAI SDK compatible)
+- Model loading from NFS takes longer than local disk (~5-6 min for Stella)
 
 ## External References
 

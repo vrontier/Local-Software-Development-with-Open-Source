@@ -1,0 +1,32 @@
+services:
+  vllm:
+    image: nvcr.io/nvidia/vllm:25.12-py3
+    container_name: qwen-coder
+    privileged: true
+    ipc: host
+    network_mode: host
+    volumes:
+      - /mnt/models:/models:ro
+      - /home/llm-agent/vllm-service/logs:/workspace/logs:rw
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    command: >
+      vllm serve /models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120
+      --trust-remote-code
+      --gpu-memory-utilization 0.93
+      --max-model-len 204800
+      --dtype auto
+      --port 8000
+      --host 0.0.0.0
+      --tool-call-parser hermes
+      --enable-auto-tool-choice
+      --disable-sliding-window
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

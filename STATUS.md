@@ -1,16 +1,20 @@
 # System Status
 
-**Last Updated**: 2026-01-25
+**Last Updated**: 2026-02-04
 
 ---
 
 ## 🎯 Production Systems
 
+Both systems run vLLM as a **docker-compose service** with `restart: unless-stopped`, automatically starting on boot and restarting after crashes. Models are stored centrally on NFS.
+
 ### Pegasus - GPT-OSS-120B
 - **Status**: ✅ Operational
 - **API**: http://pegasus.home.arpa:8000
 - **Model**: OpenAI GPT-OSS-120B (MXFP4, 117B params, 130GB)
-- **vLLM**: Community build (eugr/spark-vllm-docker)
+- **Model Location**: NFS (`/mnt/models/models--openai--gpt-oss-120b`)
+- **vLLM**: Community build (`vllm-gb10:latest`, v0.14.0rc2.dev259)
+- **Service**: docker-compose (`~/vllm-service/docker-compose.yml`)
 - **Performance**: 34 tokens/sec sustained
 - **Context**: 131,072 tokens
 - **Features**: Tool calling enabled (OpenAI-compatible)
@@ -20,10 +24,12 @@
 ### Stella - Qwen3-Coder-30B-A3B
 - **Status**: ✅ Operational
 - **API**: http://stella.home.arpa:8000
-- **Model**: Qwen/Qwen3-Coder-30B-A3B-Instruct (30B MoE, 3B active, 18GB)
-- **vLLM**: NVIDIA Container v0.11.1 (nvcr.io/nvidia/vllm:25.12-py3)
-- **Performance**: TBD (MoE optimized for fast inference)
-- **Context**: 32,768 tokens (testing 200K+ extended context)
+- **Model**: Qwen/Qwen3-Coder-30B-A3B-Instruct (30B MoE, 3B active, 57GB)
+- **Model Location**: NFS (`/mnt/models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct`)
+- **vLLM**: NVIDIA Container (`nvcr.io/nvidia/vllm:25.12-py3`, v0.11.1)
+- **Service**: docker-compose (`~/vllm-service/docker-compose.yml`)
+- **Performance**: MoE optimized for fast inference
+- **Context**: 204,800 tokens
 - **Features**: Tool calling enabled (Hermes parser), coding-optimized
 - **Role**: Fast Inference - Code generation, interactive development
 - **Documentation**: [systems/stella/](systems/stella/)
@@ -34,13 +40,15 @@
 
 | Feature | Pegasus | Stella |
 |---------|---------|--------|
-| **Hardware** | ASUS Ascend GB10 | ASUS Ascent GX10 (Grace Blackwell) |
+| **Hardware** | ASUS Ascent GX10 | Lenovo ThinkStation PGX |
 | **GPU Memory** | 128GB | 128GB (unified ARM) |
 | **Model** | GPT-OSS-120B | Qwen3-Coder-30B-A3B |
-| **Size** | 117B params, 130GB | 30B params (3B active), 18GB |
-| **Context** | 131K tokens | 32K tokens (testing 200K+) |
+| **Size** | 117B params, 130GB | 30B params (3B active), 57GB |
+| **Context** | 131K tokens | 204K tokens |
 | **Speed** | 34 tok/s | TBD (MoE optimized) |
 | **Quantization** | MXFP4 | BF16 (unquantized) |
+| **Model Storage** | NFS (flashstore) | NFS (flashstore) |
+| **Service** | docker-compose | docker-compose |
 | **Use Case** | Deep analysis | Code generation |
 | **Tool Calling** | ✅ Enabled (OpenAI) | ✅ Enabled (Hermes) |
 
@@ -60,32 +68,46 @@
 
 ## 🗄️ Infrastructure
 
-### Model Storage
+### Model Storage (NFS)
 - **NFS Server**: flashstore.home.arpa:/volume1/models
 - **Capacity**: 9.1 TB (RAID5, ASUSTOR FS6712X)
 - **Network**: 10 GbE
-- **Mount Point**: /mnt/models (on Pegasus)
+- **Mount Point**: `/mnt/models` (on both Pegasus and Stella)
+- **fstab entry**: `flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noatime,nofail,... 0 0`
 - **Contents**:
-  - GPT-OSS-120B: 130.53 GB
-  - GLM-4.7-Flash-NVFP4: 20.4 GB (downloading)
+  - `models--openai--gpt-oss-120b`: 130 GB (Pegasus)
+  - `models--Qwen--Qwen3-Coder-30B-A3B-Instruct`: 57 GB (Stella)
+
+### Service Management
+- **Deployment**: docker-compose with `restart: unless-stopped`
+- **Config Location**: `~/vllm-service/docker-compose.yml` on each host
+- **Start**: `cd ~/vllm-service && docker compose up -d`
+- **Stop**: `cd ~/vllm-service && docker compose down`
+- **Logs**: `docker logs -f <container-name>`
 
 ### Network Configuration
-- **DNS**: Local `.home.arpa` domain
+- **DNS**: Local `.home.arpa` domain (resolved by pfSense at 10.0.0.1)
 - **Firewall**: UFW on all systems
 - **Ports**:
   - Pegasus: 8000 (GPT-OSS-120B API)
-  - Stella: 8000 (GLM-4.7-Flash API)
+  - Stella: 8000 (Qwen3-Coder API)
   - Venus: 8001 (reserved, inactive)
 
 ---
 
 ## 📈 Recent Activity
 
+### 2026-02-04
+- ✅ Both systems: Configured vLLM as docker-compose service with auto-restart
+- ✅ Both systems: Models migrated to NFS storage (flashstore)
+- ✅ Both systems: Local model caches cleaned up (~470GB freed on Stella, ~60GB on Pegasus)
+- ✅ Stella: Extended context confirmed at 204,800 tokens
+- ✅ Documentation: Updated for service-based deployment
+
 ### 2026-01-25
 - ✅ Pegasus: Added OpenAI-compatible tool calling
 - ✅ Documentation: Reorganized structure (systems/, docs/, archive/)
 - ✅ Stella: Successfully deployed Qwen/Qwen3-Coder-30B-A3B-Instruct with vLLM 0.11.1
-- 🔄 Stella: Testing extended 200K+ context configuration
 
 ### 2026-01-22
 - ✅ Pegasus: GPT-OSS-120B deployed successfully
@@ -124,17 +146,17 @@ curl http://stella.home.arpa:8000/health
 
 ## 🎯 Current Focus
 
-**Active Work**: Optimizing Stella for extended context (200K+ tokens)
-- Test 204,800 token context configuration
-- Benchmark performance vs Pegasus
-- Document tool calling format/usage
-- Performance testing and optimization
+**Completed**: Production service deployment
+- ✅ Both systems running as docker-compose services
+- ✅ Models centralized on NFS storage
+- ✅ Auto-restart on boot/crash configured
+- ✅ Extended context (204K) working on Stella
 
 **Next Steps**:
-1. Finalize extended context settings
-2. Create performance comparison benchmarks
-3. Document tool calling examples
-4. Move cached models to flashstore NFS
+1. Benchmark Stella performance (tokens/sec)
+2. Document tool calling examples for both formats
+3. Add monitoring (Prometheus/Grafana)
+4. Create health check automation scripts
 
 ---
 

@@ -12,11 +12,12 @@ Stella deploys **Qwen/Qwen3-Coder-30B-A3B-Instruct**, a coding-optimized MoE mod
 
 ## Hardware
 
-- **System**: Stella (ASUS Ascent GX10)
+- **System**: Stella (Lenovo ThinkStation PGX)
 - **GPU**: NVIDIA GB10 Grace Blackwell (SM 12.0)
 - **Architecture**: ARM64 (aarch64)
 - **GPU Memory**: 128 GiB unified memory
-- **Storage**: Local NVMe (916GB total, ~500GB available)
+- **Storage**: Local NVMe (916GB, ~800GB available)
+- **Model Storage**: NFS mount at `/mnt/models` (flashstore.home.arpa)
 
 ---
 
@@ -26,8 +27,9 @@ Stella deploys **Qwen/Qwen3-Coder-30B-A3B-Instruct**, a coding-optimized MoE mod
 
 - **Architecture**: Qwen3MoeForCausalLM
 - **Parameters**: 30B total, 3B active per token (MoE)
-- **Size**: 18 GB cached on disk, 56.9GB loaded in GPU
-- **Context Length**: 32,768 tokens (default), supports up to 200K+
+- **Size**: 57 GB on disk, 56.9GB loaded in GPU
+- **Location**: `/mnt/models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120`
+- **Context Length**: 204,800 tokens (configured)
 - **Precision**: BF16 (unquantized)
 - **Languages**: Multilingual (60+ languages)
 - **Specialization**: Code generation, software development
@@ -68,9 +70,11 @@ Stella deploys **Qwen/Qwen3-Coder-30B-A3B-Instruct**, a coding-optimized MoE mod
 - **Container Name**: `qwen-coder`
 - **Port**: 8000
 
-### Current Configuration (32K Context)
+### Current Configuration (204K Context, NFS Storage)
 
-**docker-compose.yml**:
+**Updated (2026-02-04): Model now served from NFS with 204K context**
+
+**docker-compose.yml** (`~/vllm-service/docker-compose.yml`):
 ```yaml
 services:
   vllm:
@@ -80,23 +84,22 @@ services:
     ipc: host
     network_mode: host
     volumes:
-      - /home/llm-agent/ai-shared/cache/huggingface:/root/.cache/huggingface:rw
-      - /home/llm-agent/ai-shared/models:/models:rw
+      - /mnt/models:/models:ro
       - /home/llm-agent/vllm-service/logs:/workspace/logs:rw
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-      - HF_HOME=/root/.cache/huggingface
     command: >
-      vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct
+      vllm serve /models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120
       --trust-remote-code
-      --gpu-memory-utilization 0.85
-      --max-model-len 32768
+      --gpu-memory-utilization 0.93
+      --max-model-len 204800
       --dtype auto
       --port 8000
       --host 0.0.0.0
       --tool-call-parser hermes
       --enable-auto-tool-choice
+      --disable-sliding-window
     restart: unless-stopped
     deploy:
       resources:
@@ -107,30 +110,35 @@ services:
               capabilities: [gpu]
 ```
 
-### Extended Context Configuration (200K Tokens)
+**Key Features**:
+- `restart: unless-stopped`: Auto-restarts on boot and after crashes
+- Model served directly from NFS (`/mnt/models`)
+- 204,800 token context window
+- `--tool-call-parser hermes`: Hermes-format function calling
+- `--enable-auto-tool-choice`: Automatic tool selection
 
-For 204,800 token context (aggressive memory use):
+### Service Management
 
-```yaml
-    command: >
-      vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct
-      --trust-remote-code
-      --gpu-memory-utilization 0.95
-      --max-model-len 204800
-      --dtype auto
-      --port 8000
-      --host 0.0.0.0
-      --tool-call-parser hermes
-      --enable-auto-tool-choice
-      --enable-prefix-caching false
-      --disable-sliding-window
+```bash
+# Start service
+cd ~/vllm-service && docker compose up -d
+
+# Stop service
+cd ~/vllm-service && docker compose down
+
+# View logs
+docker logs -f qwen-coder
+
+# Restart service
+cd ~/vllm-service && docker compose restart
 ```
 
-**Key Changes**:
-- Increased GPU memory to 0.95 (use almost all available)
-- Disabled prefix caching (saves GPU memory)
-- Disabled sliding window
-- Context increased to 204,800 tokens
+### Prerequisites
+
+NFS mount must be configured in `/etc/fstab`:
+```
+flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noatime,nofail,rsize=1048576,wsize=1048576 0 0
+```
 
 ---
 

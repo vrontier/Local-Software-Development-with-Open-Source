@@ -1,10 +1,10 @@
 # Pegasus GPT-OSS-120B Deployment
 
 ## Overview
-Successfully deployed OpenAI's GPT-OSS-120B model on Pegasus (ASUS Ascend GB10) using community-optimized vLLM for Blackwell architecture. This model serves as the **Architect & Analyst** role in our local software development workflow.
+Successfully deployed OpenAI's GPT-OSS-120B model on Pegasus (ASUS Ascent GX10) using community-optimized vLLM for Blackwell architecture. This model serves as the **Architect & Analyst** role in our local software development workflow.
 
 ## Hardware
-- **System**: Pegasus (ASUS Ascend)
+- **System**: Pegasus (ASUS Ascent GX10)
 - **GPU**: NVIDIA GB10 (Blackwell architecture, SM12.1)
 - **GPU Memory**: 128 GiB
 - **Model Storage**: NFS share at `flashstore.home.arpa:/volume1/models`
@@ -31,34 +31,66 @@ cd ~/spark-vllm-docker
 ./build-and-copy.sh --use-wheels nightly -t vllm-gb10
 ```
 
-### Run Command
+### Service Deployment (docker-compose)
 
-**Updated (2026-01-25): Added OpenAI-compatible tool calling support**
+**Updated (2026-02-04): Now runs as a docker-compose service with auto-restart**
 
-```bash
-docker run -d --name gpt-oss-120b \
-  --privileged --gpus all \
-  --ipc=host --network host \
-  -v /mnt/models:/models:ro \
-  vllm-gb10 \
-  vllm serve /models/models--openai--gpt-oss-120b/snapshots/b5c939de8f754692c1647ca79fbf85e8c1e70f8a \
-    --trust-remote-code \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len 131072 \
-    --port 8000 \
-    --host 0.0.0.0 \
-    --load-format fastsafetensors \
-    --tool-call-parser openai \
-    --enable-auto-tool-choice
+The service is deployed via docker-compose at `~/vllm-service/docker-compose.yml`:
+
+```yaml
+services:
+  vllm:
+    image: vllm-gb10:latest
+    container_name: gpt-oss-120b
+    privileged: true
+    ipc: host
+    network_mode: host
+    volumes:
+      - /mnt/models:/models:ro
+    command: >
+      vllm serve /models/models--openai--gpt-oss-120b/snapshots/b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+      --trust-remote-code
+      --gpu-memory-utilization 0.90
+      --max-model-len 131072
+      --port 8000
+      --host 0.0.0.0
+      --load-format fastsafetensors
+      --tool-call-parser openai
+      --enable-auto-tool-choice
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 ```
 
-**New Parameters:**
-- `--tool-call-parser openai`: Enables OpenAI-compatible function calling format
-- `--enable-auto-tool-choice`: Automatically selects tools when appropriate
+**Service Management:**
+```bash
+# Start service
+cd ~/vllm-service && docker compose up -d
+
+# Stop service
+cd ~/vllm-service && docker compose down
+
+# View logs
+docker logs -f gpt-oss-120b
+
+# Restart service
+cd ~/vllm-service && docker compose restart
+```
+
+**Key Features:**
+- `restart: unless-stopped`: Auto-restarts on boot and after crashes
+- Model loaded from NFS (`/mnt/models`)
+- `--tool-call-parser openai`: OpenAI-compatible function calling
+- `--enable-auto-tool-choice`: Automatic tool selection
 
 **Requirements:**
-- vLLM >= 0.10.2 (required for `--tool-call-parser openai`)
-- Current vLLM version: 0.14.0rc2.dev259 ✅
+- NFS mount at `/mnt/models` (add to `/etc/fstab` for persistence)
+- vLLM >= 0.10.2 (current: 0.14.0rc2.dev259 ✅)
 
 **Sources:**
 - https://docs.vllm.ai/projects/recipes/en/latest/OpenAI/GPT-OSS.html

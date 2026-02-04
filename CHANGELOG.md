@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2026-02-04] - Production Service Deployment & Storage Migration
+
+### Infrastructure
+- **Service Deployment**: Both Pegasus and Stella now run vLLM as docker-compose services
+  - Auto-restart on boot (`restart: unless-stopped`)
+  - Consistent service management via `docker compose up/down/restart`
+  - Config stored at `~/vllm-service/docker-compose.yml` on each host
+
+- **NFS Model Storage**: All models migrated to central NFS storage
+  - Mount point: `/mnt/models` on both systems
+  - NFS server: `flashstore.home.arpa:/volume1/models`
+  - Added to `/etc/fstab` for persistence on both hosts
+
+- **Disk Cleanup**: Freed significant disk space on both systems
+  - Stella: ~467GB freed (61% → 7% usage)
+  - Pegasus: ~86GB freed (20% → 10% usage)
+  - Removed local model caches, unused Docker images, build caches
+
+### Changed
+- **Stella Context**: Confirmed at 204,800 tokens (extended context working)
+- **Stella DNS**: Fixed DNS resolution (added pfSense 10.0.0.1 to resolvers)
+- **Documentation**: Updated all docs to reflect service-based deployment
+
+### Configuration Files Added
+- `systems/pegasus/docker-compose.yml`
+- `systems/stella/docker-compose.yml`
+
+---
+
 ## [2026-01-25] - Documentation Reorganization & Stella Update
 
 ### Added
@@ -52,7 +81,7 @@ All notable changes to this project will be documented in this file.
 - **Performance**: 34 tokens/sec sustained throughput
 - **Context**: 131,072 tokens
 - **Resolution**: Fixed Marlin backend hang using community container
-- **Hardware**: ASUS Ascend GB10, 128GB GPU
+- **Hardware**: ASUS Ascent GX10, 128GB GPU
 - **Storage**: NFS mount from flashstore.home.arpa
 - **API**: http://pegasus.home.arpa:8000
 
@@ -70,7 +99,7 @@ All notable changes to this project will be documented in this file.
 - **Duration**: ~8 hours (435 CUDA kernel files)
 - **Model**: zai-org/GLM-4.7-Flash (30B MoE)
 - **Issue**: Model problematic, needs replacement
-- **Hardware**: ASUS Ascent GX10, GB10 Grace Blackwell, 128GB ARM
+- **Hardware**: Lenovo ThinkStation PGX, GB10 Grace Blackwell, 128GB ARM
 
 ---
 
@@ -104,9 +133,9 @@ All notable changes to this project will be documented in this file.
 - **Network**: Configured local .home.arpa DNS
 - **Storage**: Set up NFS share on flashstore (9.1TB, RAID5)
 - **Systems**: 
-  - Pegasus: ASUS Ascend GB10
+  - Pegasus: ASUS Ascent GX10
   - Venus: RTX PRO 6000 Blackwell
-  - Stella: ASUS Ascent GX10 Grace Blackwell
+  - Stella: Lenovo ThinkStation PGX (Grace Blackwell)
 
 ### vLLM GB10 Development
 - Created Dockerfile.gb10 for Blackwell support

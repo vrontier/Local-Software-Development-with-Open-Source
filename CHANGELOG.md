@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2026-02-11] - Migration to llama.cpp & Qwen3 Benchmarking
+
+### Infrastructure
+- **Engine Migration**: Both systems migrated from vLLM (Docker) to llama.cpp (native, systemd)
+  - Built llama.cpp from source on both systems (b7999+, CUDA 13.0, SM 12.1)
+  - Configured as systemd services (`llama-server.service`) with `Requires=mnt-models.mount`
+  - Auto-restart on failure, starts after NFS mount is ready
+  - Docker completely removed from both systems — no container overhead
+
+- **Pegasus Performance Boost**: GPT-OSS-120B generation speed **34 → 58.8 tok/s (+73%)**
+  - Same model, same MXFP4 quantization — llama.cpp is simply faster on GB10
+  - Model re-downloaded as GGUF format (59 GiB vs 130 GB safetensors)
+  - Prompt processing: 1,809 tok/s
+  - Reasoning traces preserved via `--jinja` flag
+
+- **Stella Model Change**: Switched from Qwen3-Coder-30B-A3B (MoE) to Qwen3-14B (dense)
+  - Motivated by Taskmeister meeting-minutes quality requirements
+  - Dense 14B provides better quality per active parameter than 3B-active MoE
+  - Performance: 14.7 tok/s generation, 1,200 tok/s prompt processing
+  - Q8_0 quantization (14.6 GiB) — best quality-to-size ratio
+
+### Benchmarking
+- **Qwen3 Dense Family on GB10** (llama.cpp, Q8_0, flash attention):
+
+  | Model | Size | Prompt (pp2048) | Generation (tg512) |
+  |-------|------|-----------------|-------------------|
+  | Qwen3-8B | 8.1 GiB | 2,236 tok/s | 27.7 tok/s |
+  | Qwen3-14B | 14.6 GiB | 1,200 tok/s | 14.7 tok/s |
+  | Qwen3-32B | 32.4 GiB | 503 tok/s | 6.5 tok/s |
+
+- Generation speed scales linearly with model size (memory-bandwidth bound at ~78% of theoretical 273 GB/s)
+- Full results: [docs/research/BENCHMARK_Qwen3_Dense_GB10_llamacpp.md](docs/research/BENCHMARK_Qwen3_Dense_GB10_llamacpp.md)
+
+### Research & Evaluation
+- **NVFP4 on GB10**: Investigated and ruled out — CUTLASS FP4 kernels not compiled for SM 12.1 in vLLM 0.11.1
+- **AWQ on GB10**: Downloaded Qwen3-32B-AWQ (19 GB) — available on NFS but not deployed (native context only 40K)
+- **Taskmeister Qwen3 Analysis**: Evaluated Qwen3 family for meeting-minutes task (see `TASKMEISTER_LLM_Qwen3_family.md`)
+
+### Models on NFS
+New models added to flashstore:
+- `gpt-oss-120b-GGUF/`: 60 GB (Pegasus, active)
+- `Qwen3-14B-GGUF/`: 15 GB (Stella, active)
+- `Qwen3-32B-GGUF/`: 33 GB (benchmark, available)
+- `Qwen3-8B-GGUF/`: 8.5 GB (benchmark, available)
+- `models--Qwen--Qwen3-32B-AWQ/`: 19 GB (vLLM format, available)
+
+### Removed
+- vLLM Docker containers and images on both systems
+- Docker-compose service configuration (replaced by systemd)
+
+---
+
 ## [2026-02-04] - Production Service Deployment & Storage Migration
 
 ### Infrastructure

@@ -1,37 +1,37 @@
 # System Status
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-11
 
 ---
 
 ## 🎯 Production Systems
 
-Both systems run vLLM as a **docker-compose service** with `restart: unless-stopped`, automatically starting on boot and restarting after crashes. Models are stored centrally on NFS.
+Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 
 ### Pegasus - GPT-OSS-120B
 - **Status**: ✅ Operational
 - **API**: http://pegasus.home.arpa:8000
-- **Model**: OpenAI GPT-OSS-120B (MXFP4, 117B params, 130GB)
-- **Model Location**: NFS (`/mnt/models/models--openai--gpt-oss-120b`)
-- **vLLM**: Community build (`vllm-gb10:latest`, v0.14.0rc2.dev259)
-- **Service**: docker-compose (`~/vllm-service/docker-compose.yml`)
-- **Performance**: 34 tokens/sec sustained
+- **Model**: OpenAI GPT-OSS-120B (MXFP4 MoE, 117B params, 59 GiB GGUF)
+- **Model Location**: NFS (`/mnt/models/gpt-oss-120b-GGUF/`)
+- **Engine**: llama.cpp (build b7999+, CUDA 13.0, SM 12.1)
+- **Service**: systemd (`llama-server.service`)
+- **Performance**: 58.8 tok/s generation, 1,809 tok/s prompt processing (was 34 tok/s with vLLM)
 - **Context**: 131,072 tokens
-- **Features**: Tool calling enabled (OpenAI-compatible)
+- **Features**: OpenAI-compatible API, reasoning traces, Jinja chat template
 - **Role**: Architect & Analyst - Long-context analysis, architecture design
 - **Documentation**: [systems/pegasus/](systems/pegasus/)
 
-### Stella - Qwen3-Coder-30B-A3B
+### Stella - Qwen3-14B
 - **Status**: ✅ Operational
 - **API**: http://stella.home.arpa:8000
-- **Model**: Qwen/Qwen3-Coder-30B-A3B-Instruct (30B MoE, 3B active, 57GB)
-- **Model Location**: NFS (`/mnt/models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct`)
-- **vLLM**: NVIDIA Container (`nvcr.io/nvidia/vllm:25.12-py3`, v0.11.1)
-- **Service**: docker-compose (`~/vllm-service/docker-compose.yml`)
-- **Performance**: MoE optimized for fast inference
-- **Context**: 204,800 tokens
-- **Features**: Tool calling enabled (Hermes parser), coding-optimized
-- **Role**: Fast Inference - Code generation, interactive development
+- **Model**: Qwen3-14B (14.8B dense, Q8_0, 14.6 GiB)
+- **Model Location**: NFS (`/mnt/models/Qwen3-14B-GGUF/Qwen_Qwen3-14B-Q8_0.gguf`)
+- **Engine**: llama.cpp (build b7999+, CUDA 13.0, SM 12.1)
+- **Service**: systemd (`llama-server.service`)
+- **Performance**: 14.7 tok/s generation, 1,200 tok/s prompt processing
+- **Context**: 131,072 tokens (32K native + YaRN extension)
+- **Features**: OpenAI-compatible API, thinking mode
+- **Role**: General-purpose inference, meeting minutes, analysis
 - **Documentation**: [systems/stella/](systems/stella/)
 
 ---
@@ -42,15 +42,15 @@ Both systems run vLLM as a **docker-compose service** with `restart: unless-stop
 |---------|---------|--------|
 | **Hardware** | ASUS Ascent GX10 | Lenovo ThinkStation PGX |
 | **GPU Memory** | 128GB | 128GB (unified ARM) |
-| **Model** | GPT-OSS-120B | Qwen3-Coder-30B-A3B |
-| **Size** | 117B params, 130GB | 30B params (3B active), 57GB |
-| **Context** | 131K tokens | 204K tokens |
-| **Speed** | 34 tok/s | TBD (MoE optimized) |
-| **Quantization** | MXFP4 | BF16 (unquantized) |
+| **Model** | GPT-OSS-120B | Qwen3-14B |
+| **Size** | 117B params, 59 GiB (GGUF) | 14.8B params, 14.6 GiB (Q8_0) |
+| **Context** | 131K tokens | 131K tokens (YaRN) |
+| **Speed** | 58.8 tok/s | 14.7 tok/s |
+| **Quantization** | MXFP4 (GGUF) | Q8_0 (GGUF) |
+| **Engine** | llama.cpp (systemd) | llama.cpp (systemd) |
 | **Model Storage** | NFS (flashstore) | NFS (flashstore) |
-| **Service** | docker-compose | docker-compose |
-| **Use Case** | Deep analysis | Code generation |
-| **Tool Calling** | ✅ Enabled (OpenAI) | ✅ Enabled (Hermes) |
+| **Use Case** | Deep analysis | General-purpose, meeting minutes |
+| **Tool Calling** | ✅ Enabled (OpenAI) | OpenAI-compatible API |
 
 ---
 
@@ -76,26 +76,42 @@ Both systems run vLLM as a **docker-compose service** with `restart: unless-stop
 - **fstab entry**: `flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noatime,nofail,... 0 0`
 - **Contents**:
   - `models--openai--gpt-oss-120b`: 130 GB (Pegasus)
-  - `models--Qwen--Qwen3-Coder-30B-A3B-Instruct`: 57 GB (Stella)
+  - `Qwen3-14B-GGUF/`: 15 GB (Stella)
+  - `models--Qwen--Qwen3-Coder-30B-A3B-Instruct`: 57 GB (available)
+  - `models--Qwen--Qwen3-32B-AWQ`: 19 GB (available)
+  - `Qwen3-32B-GGUF/`: 33 GB (available)
+  - `Qwen3-8B-GGUF/`: 8.5 GB (available)
 
 ### Service Management
-- **Deployment**: docker-compose with `restart: unless-stopped`
-- **Config Location**: `~/vllm-service/docker-compose.yml` on each host
-- **Start**: `cd ~/vllm-service && docker compose up -d`
-- **Stop**: `cd ~/vllm-service && docker compose down`
-- **Logs**: `docker logs -f <container-name>`
+
+**Both systems** (llama.cpp, systemd):
+- **Service**: `llama-server.service`
+- **Start**: `sudo systemctl start llama-server`
+- **Stop**: `sudo systemctl stop llama-server`
+- **Restart**: `sudo systemctl restart llama-server`
+- **Status**: `sudo systemctl status llama-server`
+- **Logs**: `journalctl -u llama-server -f`
 
 ### Network Configuration
 - **DNS**: Local `.home.arpa` domain (resolved by pfSense at 10.0.0.1)
 - **Firewall**: UFW on all systems
 - **Ports**:
-  - Pegasus: 8000 (GPT-OSS-120B API)
-  - Stella: 8000 (Qwen3-Coder API)
+  - Pegasus: 8000 (GPT-OSS-120B API, vLLM)
+  - Stella: 8000 (Qwen3-14B API, llama-server)
   - Venus: 8001 (reserved, inactive)
 
 ---
 
 ## 📈 Recent Activity
+
+### 2026-02-11
+- ✅ Both systems: Switched from vLLM to llama.cpp (native CUDA build, SM 12.1)
+- ✅ Both systems: Configured as systemd services (`llama-server.service`) with NFS dependency
+- ✅ Both systems: Docker images removed, no more container overhead
+- ✅ Pegasus: GPT-OSS-120B now at 58.8 tok/s (was 34 tok/s with vLLM — **73% faster**)
+- ✅ Stella: Switched model from Qwen3-Coder-30B-A3B (MoE) to Qwen3-14B (dense, Q8_0, 14.7 tok/s)
+- ✅ Benchmarked Qwen3 dense family on GB10: 8B (27.8 tok/s), 14B (14.7 tok/s), 32B (6.5 tok/s)
+- ✅ Research: [Qwen3 Dense Benchmark Results](docs/research/BENCHMARK_Qwen3_Dense_GB10_llamacpp.md)
 
 ### 2026-02-04
 - ✅ Both systems: Configured vLLM as docker-compose service with auto-restart
@@ -135,7 +151,7 @@ curl http://stella.home.arpa:8000/health
 
 - **System Documentation**: [systems/](systems/)
   - [Pegasus (GPT-OSS-120B)](systems/pegasus/)
-  - [Stella (Qwen3-Coder-30B-A3B)](systems/stella/)
+  - [Stella (Qwen3-14B)](systems/stella/)
 - **Deployment Guides**: [docs/deployment/](docs/deployment/)
 - **Network Setup**: [docs/network/](docs/network/)
 - **Archives**: [docs/archive/](docs/archive/)
@@ -146,15 +162,16 @@ curl http://stella.home.arpa:8000/health
 
 ## 🎯 Current Focus
 
-**Completed**: Production service deployment
-- ✅ Both systems running as docker-compose services
-- ✅ Models centralized on NFS storage
-- ✅ Auto-restart on boot/crash configured
-- ✅ Extended context (204K) working on Stella
+**Completed**: Full llama.cpp migration
+- ✅ Both systems: llama.cpp systemd services with NFS dependency
+- ✅ Pegasus: GPT-OSS-120B at 58.8 tok/s (73% faster than vLLM)
+- ✅ Stella: Qwen3-14B Q8_0 at 14.7 tok/s
+- ✅ Docker removed from both systems — no container overhead
+- ✅ Qwen3 dense family benchmarked on GB10 (8B/14B/32B)
 
 **Next Steps**:
-1. Benchmark Stella performance (tokens/sec)
-2. Document tool calling examples for both formats
+1. Test Qwen3-14B quality on Taskmeister meeting-minutes rubric
+2. Document tool calling examples for both systems
 3. Add monitoring (Prometheus/Grafana)
 4. Create health check automation scripts
 

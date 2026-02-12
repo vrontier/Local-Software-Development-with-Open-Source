@@ -9,7 +9,7 @@ All AI inference runs locally on your own GPU hardware, giving you full control,
 **Two production systems serving complementary roles:**
 
 - **Pegasus** - [GPT-OSS-120B](systems/pegasus/) (117B params) - Architect & Analyst
-- **Stella** - [Qwen3-Coder-30B-A3B](systems/stella/) (30B MoE) - Fast Coder
+- **Stella** - [Qwen3-8B](systems/stella/) (8.2B dense) - General-Purpose
 
 📊 **[View Current Status →](STATUS.md)** | 📖 **[View Changelog →](CHANGELOG.md)**
 
@@ -26,14 +26,14 @@ All AI inference runs locally on your own GPU hardware, giving you full control,
 
 📖 **[Documentation →](systems/pegasus/)** | 🚀 **[Quick Start →](systems/pegasus/QUICKSTART.md)**
 
-### Stella - Qwen3-Coder-30B-A3B
+### Stella - Qwen3-8B
 **Status**: ✅ Operational | **API**: http://stella.home.arpa:8000
 
-- **Model**: Qwen/Qwen3-Coder-30B-A3B-Instruct (30B MoE, 3B active, BF16)
-- **Performance**: MoE-optimized fast inference
-- **Context**: 204,800 tokens
-- **Role**: Code generation, fast interactive development
-- **Features**: Hermes-format tool calling
+- **Model**: Qwen3-8B (8.2B dense, Q8_0 GGUF)
+- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt
+- **Context**: 32,768 tokens
+- **Role**: General-purpose inference, fast responses
+- **Features**: OpenAI-compatible API, thinking mode
 
 📖 **[Documentation →](systems/stella/)** | 🚀 **[Quick Start →](systems/stella/QUICKSTART.md)**
 
@@ -44,22 +44,17 @@ All AI inference runs locally on your own GPU hardware, giving you full control,
 | **Hardware** | ASUS Ascent GX10 | Lenovo ThinkStation PGX |
 | **GPU Memory** | 128 GB | 128 GB (unified ARM) |
 | **API Endpoint** | http://pegasus.home.arpa:8000 | http://stella.home.arpa:8000 |
-| **Model** | OpenAI GPT-OSS-120B | Qwen/Qwen3-Coder-30B-A3B-Instruct |
-| **Parameters** | 117B (dense) | 30B total, 3B active (MoE) |
-| **Model Size** | 130 GB | 57 GB |
+| **Model** | OpenAI GPT-OSS-120B | Qwen3-8B |
+| **Parameters** | 117B MoE | 8.2B dense |
+| **Model Size** | 59 GiB (MXFP4 GGUF) | 8.1 GiB (Q8_0 GGUF) |
 | **Model Storage** | NFS (flashstore) | NFS (flashstore) |
-| **Quantization** | MXFP4 | BF16 (unquantized) |
-| **Max Context** | 131,072 tokens | 204,800 tokens |
-| **Speed** | 34 tok/s | TBD (MoE optimized) |
-| **vLLM Version** | 0.14.0rc2.dev259 | 0.11.1+nv25.12 |
-| **Container** | `vllm-gb10:latest` | `nvcr.io/nvidia/vllm:25.12-py3` |
-| **Service** | docker-compose | docker-compose |
-| **Tool Calling** | Yes | Yes |
-| **Tool Parser** | `openai` (JSON in `tool_calls`) | `hermes` (XML in `content`) |
-| **Auto Tool Choice** | Enabled | Enabled |
-| **Reasoning Traces** | Yes (`reasoning_content`) | No |
-| **OpenAI SDK Compatible** | Full | Partial (requires XML parsing) |
-| **Specialization** | Architecture, analysis, code review | Code generation, fast inference |
+| **Quantization** | MXFP4 | Q8_0 |
+| **Max Context** | 131,072 tokens | 32,768 tokens |
+| **Speed** | 58.8 tok/s | 27.8 tok/s |
+| **Engine** | llama.cpp (systemd) | llama.cpp (systemd) |
+| **Reasoning Traces** | Yes (`reasoning_content`) | Thinking mode (Qwen3) |
+| **OpenAI SDK Compatible** | Full | Full |
+| **Specialization** | Architecture, analysis, code review | General-purpose, fast inference |
 
 ## 🔧 Tool Calling
 
@@ -129,9 +124,9 @@ Self-contained vLLM project with native GB10/Blackwell support. This is the foun
        │  ASUS Ascent     │           │  Lenovo PGX      │
        │  GX10 (128GB)    │           │  GB10 (128GB)    │
        │                  │           │  Grace Blackwell │
-       │  GPT-OSS-120B    │           │  Qwen3-Coder     │
-       │  117B params     │           │  30B MoE         │
-       │  34 tok/s        │           │  MoE optimized   │
+       │  GPT-OSS-120B    │           │  Qwen3-8B        │
+       │  117B params     │           │  8.2B dense      │
+       │  58.8 tok/s      │           │  27.8 tok/s      │
        │  :8000           │           │  :8000           │
        └────────┬─────────┘           └─────────┬────────┘
                 │                               │
@@ -151,7 +146,7 @@ Self-contained vLLM project with native GB10/Blackwell support. This is the foun
 ├── CHANGELOG.md                 # Project timeline and changes
 ├── systems/                     # Per-system documentation
 │   ├── pegasus/                # GPT-OSS-120B deployment
-│   └── stella/                 # Qwen3-Coder-30B-A3B deployment
+│   └── stella/                 # Qwen3-8B deployment
 ├── docs/                       # Supporting documentation
 │   ├── deployment/             # Deployment guides
 │   ├── network/                # Network configuration
@@ -165,7 +160,7 @@ Self-contained vLLM project with native GB10/Blackwell support. This is the foun
 
 **System Documentation**:
 - [Pegasus (GPT-OSS-120B)](systems/pegasus/) - Production Architect & Analyst system
-- [Stella (Qwen3-Coder-30B-A3B)](systems/stella/) - Fast code generation system
+- [Stella (Qwen3-8B)](systems/stella/) - General-purpose fast inference
 
 **Status & History**:
 - [STATUS.md](STATUS.md) - Current deployment status

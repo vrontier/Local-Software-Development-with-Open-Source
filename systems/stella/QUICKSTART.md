@@ -1,8 +1,12 @@
 # Stella Quick Reference
 
-**Model**: GadflyII/GLM-4.7-Flash-NVFP4 (30B MoE, NVFP4 quantized)  
-**API**: http://stella.home.arpa:8000  
-**Status**: 🔄 Building
+> **Note**: This document still references the old vLLM/Docker deployment and needs a full rewrite. Current deployment uses llama.cpp via systemd.
+
+**Model**: Qwen3-8B (8.2B dense, Q8_0 GGUF)
+**API**: http://stella.home.arpa:8000
+**Engine**: llama.cpp (systemd service)
+**Performance**: 27.8 tok/s generation
+**Status**: ✅ Operational
 
 ---
 

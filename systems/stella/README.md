@@ -1,11 +1,13 @@
-# Stella - Qwen3-Coder-30B-A3B-Instruct Deployment
+# Stella - Qwen3-8B Deployment
+
+> **Note**: Parts of this document still reference the previous Qwen3-Coder-30B-A3B (vLLM/Docker) deployment and need a full rewrite. The overview and model specs below are current.
 
 ## Overview
 
-Stella deploys **Qwen/Qwen3-Coder-30B-A3B-Instruct**, a coding-optimized MoE model designed for fast inference and code generation on NVIDIA GB10 Grace Blackwell hardware.
+Stella deploys **Qwen3-8B**, a dense general-purpose model running via **llama.cpp** (systemd) on NVIDIA GB10 Grace Blackwell hardware.
 
-**Role**: Fast Code Generation & Interactive Development  
-**Status**: ✅ Operational  
+**Role**: General-Purpose Inference & Fast Responses
+**Status**: ✅ Operational
 **API**: http://stella.home.arpa:8000
 
 ---
@@ -23,24 +25,17 @@ Stella deploys **Qwen/Qwen3-Coder-30B-A3B-Instruct**, a coding-optimized MoE mod
 
 ## Model Specifications
 
-### Qwen/Qwen3-Coder-30B-A3B-Instruct
+### Qwen3-8B (Q8_0 GGUF)
 
-- **Architecture**: Qwen3MoeForCausalLM
-- **Parameters**: 30B total, 3B active per token (MoE)
-- **Size**: 57 GB on disk, 56.9GB loaded in GPU
-- **Location**: `/mnt/models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120`
-- **Context Length**: 204,800 tokens (configured)
-- **Precision**: BF16 (unquantized)
-- **Languages**: Multilingual (60+ languages)
-- **Specialization**: Code generation, software development
-- **Release**: Alibaba Cloud, 2025
-
-### MoE Architecture
-
-- **Total Experts**: Multiple routing experts
-- **Active Experts**: ~3B parameters per token
-- **Efficiency**: 10x faster than dense 30B models
-- **Quality**: Comparable to much larger models
+- **Architecture**: Qwen3ForCausalLM (dense)
+- **Parameters**: 8.2B
+- **Size**: 8.1 GiB (Q8_0 GGUF)
+- **Location**: `/mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf`
+- **Context Length**: 32,768 tokens
+- **Quantization**: Q8_0
+- **Engine**: llama.cpp (systemd service)
+- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt processing
+- **Features**: Thinking mode (Qwen3 think/no-think), OpenAI-compatible API
 
 ---
 

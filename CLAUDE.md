@@ -14,7 +14,7 @@ This is a **documentation and configuration repository** for a production dual-G
 ├── CHANGELOG.md                 # Project timeline and changes
 ├── systems/                     # Per-system documentation
 │   ├── pegasus/                 # GPT-OSS-120B deployment docs
-│   └── stella/                  # Qwen3-14B deployment docs
+│   └── stella/                  # Qwen3-8B deployment docs
 ├── docs/                        # Supporting documentation
 │   ├── archive/                 # Historical documents and sessions
 │   └── research/                # Benchmarks and analysis
@@ -40,12 +40,12 @@ Both systems run **llama.cpp** as **systemd services** (`llama-server.service`),
 - **Docs**: `systems/pegasus/`
 
 ### Stella (General-Purpose)
-- **Model**: Qwen3-14B (14.8B dense, Q8_0, 14.6 GiB GGUF)
+- **Model**: Qwen3-8B (8.2B dense, Q8_0, 8.1 GiB GGUF)
 - **API**: http://stella.home.arpa:8000
 - **Hardware**: Lenovo ThinkStation PGX, 128GB unified ARM, SM 12.1
-- **Performance**: 14.7 tok/s generation, 1,200 tok/s prompt, 131K context (YaRN)
+- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt, 32K context
 - **Engine**: llama.cpp (build b7999+, CUDA 13.0)
-- **Model Location**: `/mnt/models/Qwen3-14B-GGUF/Qwen_Qwen3-14B-Q8_0.gguf`
+- **Model Location**: `/mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf`
 - **Service**: `llama-server.service` (systemd)
 - **Docs**: `systems/stella/`
 
@@ -85,7 +85,7 @@ Both systems expose an OpenAI-compatible API:
 
 # Model paths:
 -m /mnt/models/gpt-oss-120b-GGUF/gpt-oss-120b-mxfp4-00001-of-00003.gguf   # Pegasus
--m /mnt/models/Qwen3-14B-GGUF/Qwen_Qwen3-14B-Q8_0.gguf                     # Stella
+-m /mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf                       # Stella
 ```
 
 ## Working with This Repository
@@ -129,7 +129,7 @@ ssh stella-llm     # Stella (as llm-agent)
 
 llama.cpp uses GGUF filenames as model IDs:
 - **Pegasus**: `gpt-oss-120b-mxfp4-00001-of-00003.gguf`
-- **Stella**: `Qwen_Qwen3-14B-Q8_0.gguf`
+- **Stella**: `Qwen_Qwen3-8B-Q8_0.gguf`
 
 Query available models: `curl http://<host>:8000/v1/models`
 
@@ -158,12 +158,12 @@ sudo mount -t nfs4 flashstore.home.arpa:/volume1/models /mnt/models \
 | Path | Size | Status |
 |------|------|--------|
 | `gpt-oss-120b-GGUF/` | 60 GB | Active (Pegasus) |
-| `Qwen3-14B-GGUF/` | 15 GB | Active (Stella) |
+| `Qwen3-8B-GGUF/` | 8.5 GB | Active (Stella) |
 | `models--openai--gpt-oss-120b/` | 130 GB | Legacy (safetensors, can be removed) |
 | `models--Qwen--Qwen3-Coder-30B-A3B-Instruct/` | 57 GB | Available |
 | `models--Qwen--Qwen3-32B-AWQ/` | 19 GB | Available (vLLM format) |
 | `Qwen3-32B-GGUF/` | 33 GB | Available (benchmarked at 6.5 tok/s) |
-| `Qwen3-8B-GGUF/` | 8.5 GB | Available (benchmarked at 27.8 tok/s) |
+| `Qwen3-14B-GGUF/` | 15 GB | Available |
 
 ## Known Issues
 

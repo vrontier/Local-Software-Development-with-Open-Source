@@ -1,6 +1,6 @@
 # System Status
 
-**Last Updated**: 2026-02-11
+**Last Updated**: 2026-02-12
 
 ---
 
@@ -21,17 +21,17 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **Role**: Architect & Analyst - Long-context analysis, architecture design
 - **Documentation**: [systems/pegasus/](systems/pegasus/)
 
-### Stella - Qwen3-14B
+### Stella - Qwen3-8B
 - **Status**: ✅ Operational
 - **API**: http://stella.home.arpa:8000
-- **Model**: Qwen3-14B (14.8B dense, Q8_0, 14.6 GiB)
-- **Model Location**: NFS (`/mnt/models/Qwen3-14B-GGUF/Qwen_Qwen3-14B-Q8_0.gguf`)
+- **Model**: Qwen3-8B (8.2B dense, Q8_0, 8.1 GiB)
+- **Model Location**: NFS (`/mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf`)
 - **Engine**: llama.cpp (build b7999+, CUDA 13.0, SM 12.1)
 - **Service**: systemd (`llama-server.service`)
-- **Performance**: 14.7 tok/s generation, 1,200 tok/s prompt processing
-- **Context**: 131,072 tokens (32K native + YaRN extension)
+- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt processing
+- **Context**: 32,768 tokens
 - **Features**: OpenAI-compatible API, thinking mode
-- **Role**: General-purpose inference, meeting minutes, analysis
+- **Role**: General-purpose inference, fast responses
 - **Documentation**: [systems/stella/](systems/stella/)
 
 ---
@@ -42,14 +42,14 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 |---------|---------|--------|
 | **Hardware** | ASUS Ascent GX10 | Lenovo ThinkStation PGX |
 | **GPU Memory** | 128GB | 128GB (unified ARM) |
-| **Model** | GPT-OSS-120B | Qwen3-14B |
-| **Size** | 117B params, 59 GiB (GGUF) | 14.8B params, 14.6 GiB (Q8_0) |
-| **Context** | 131K tokens | 131K tokens (YaRN) |
-| **Speed** | 58.8 tok/s | 14.7 tok/s |
+| **Model** | GPT-OSS-120B | Qwen3-8B |
+| **Size** | 117B params, 59 GiB (GGUF) | 8.2B params, 8.1 GiB (Q8_0) |
+| **Context** | 131K tokens | 32K tokens |
+| **Speed** | 58.8 tok/s | 27.8 tok/s |
 | **Quantization** | MXFP4 (GGUF) | Q8_0 (GGUF) |
 | **Engine** | llama.cpp (systemd) | llama.cpp (systemd) |
 | **Model Storage** | NFS (flashstore) | NFS (flashstore) |
-| **Use Case** | Deep analysis | General-purpose, meeting minutes |
+| **Use Case** | Deep analysis | General-purpose, fast responses |
 | **Tool Calling** | ✅ Enabled (OpenAI) | OpenAI-compatible API |
 
 ---
@@ -76,7 +76,7 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **fstab entry**: `flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noatime,nofail,... 0 0`
 - **Contents**:
   - `models--openai--gpt-oss-120b`: 130 GB (Pegasus)
-  - `Qwen3-14B-GGUF/`: 15 GB (Stella)
+  - `Qwen3-8B-GGUF/`: 8.5 GB (Stella)
   - `models--Qwen--Qwen3-Coder-30B-A3B-Instruct`: 57 GB (available)
   - `models--Qwen--Qwen3-32B-AWQ`: 19 GB (available)
   - `Qwen3-32B-GGUF/`: 33 GB (available)
@@ -97,12 +97,15 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **Firewall**: UFW on all systems
 - **Ports**:
   - Pegasus: 8000 (GPT-OSS-120B API, vLLM)
-  - Stella: 8000 (Qwen3-14B API, llama-server)
+  - Stella: 8000 (Qwen3-8B API, llama-server)
   - Venus: 8001 (reserved, inactive)
 
 ---
 
 ## 📈 Recent Activity
+
+### 2026-02-12
+- ✅ Stella: Switched model from Qwen3-14B to Qwen3-8B (Q8_0, 27.8 tok/s — nearly 2x faster)
 
 ### 2026-02-11
 - ✅ Both systems: Switched from vLLM to llama.cpp (native CUDA build, SM 12.1)
@@ -151,7 +154,7 @@ curl http://stella.home.arpa:8000/health
 
 - **System Documentation**: [systems/](systems/)
   - [Pegasus (GPT-OSS-120B)](systems/pegasus/)
-  - [Stella (Qwen3-14B)](systems/stella/)
+  - [Stella (Qwen3-8B)](systems/stella/)
 - **Deployment Guides**: [docs/deployment/](docs/deployment/)
 - **Network Setup**: [docs/network/](docs/network/)
 - **Archives**: [docs/archive/](docs/archive/)
@@ -165,15 +168,14 @@ curl http://stella.home.arpa:8000/health
 **Completed**: Full llama.cpp migration
 - ✅ Both systems: llama.cpp systemd services with NFS dependency
 - ✅ Pegasus: GPT-OSS-120B at 58.8 tok/s (73% faster than vLLM)
-- ✅ Stella: Qwen3-14B Q8_0 at 14.7 tok/s
+- ✅ Stella: Qwen3-8B Q8_0 at 27.8 tok/s
 - ✅ Docker removed from both systems — no container overhead
 - ✅ Qwen3 dense family benchmarked on GB10 (8B/14B/32B)
 
 **Next Steps**:
-1. Test Qwen3-14B quality on Taskmeister meeting-minutes rubric
-2. Document tool calling examples for both systems
-3. Add monitoring (Prometheus/Grafana)
-4. Create health check automation scripts
+1. Document tool calling examples for both systems
+2. Add monitoring (Prometheus/Grafana)
+3. Create health check automation scripts
 
 ---
 

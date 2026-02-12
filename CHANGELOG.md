@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2026-02-12] - Stella Model Switch to Qwen3-8B
+
+### Changed
+- **Stella Model Change**: Switched from Qwen3-14B to Qwen3-8B (dense, Q8_0)
+  - Nearly 2x faster generation: 27.8 tok/s (was 14.7 tok/s)
+  - Prompt processing: 2,236 tok/s (was 1,200 tok/s)
+  - Smaller footprint: 8.1 GiB (was 14.6 GiB)
+  - Context: 32K native (was 32K native + YaRN)
+  - Model file: `Qwen_Qwen3-8B-Q8_0.gguf`
+
+### Models on NFS
+- `Qwen3-8B-GGUF/`: 8.5 GB (Stella, active)
+- `Qwen3-14B-GGUF/`: 15 GB (available)
+
+---
+
 ## [2026-02-11] - Migration to llama.cpp & Qwen3 Benchmarking
 
 ### Infrastructure

@@ -1,12 +1,10 @@
-# Stella - Qwen3-8B Deployment
-
-> **Note**: Parts of this document still reference the previous Qwen3-Coder-30B-A3B (vLLM/Docker) deployment and need a full rewrite. The overview and model specs below are current.
+# Stella - Meta Llama 4 Scout Deployment
 
 ## Overview
 
-Stella deploys **Qwen3-8B**, a dense general-purpose model running via **llama.cpp** (systemd) on NVIDIA GB10 Grace Blackwell hardware.
+Stella deploys **Meta Llama 4 Scout 17B-16E**, a 109B-parameter mixture-of-experts model with 17B active parameters, running via **llama.cpp** (systemd) on NVIDIA GB10 Grace Blackwell hardware.
 
-**Role**: General-Purpose Inference & Fast Responses
+**Role**: General-Purpose Inference, Code Generation, Agents
 **Status**: ✅ Operational
 **API**: http://stella.home.arpa:8000
 
@@ -15,7 +13,7 @@ Stella deploys **Qwen3-8B**, a dense general-purpose model running via **llama.c
 ## Hardware
 
 - **System**: Stella (Lenovo ThinkStation PGX)
-- **GPU**: NVIDIA GB10 Grace Blackwell (SM 12.0)
+- **GPU**: NVIDIA GB10 Grace Blackwell (SM 12.1)
 - **Architecture**: ARM64 (aarch64)
 - **GPU Memory**: 128 GiB unified memory
 - **Storage**: Local NVMe (916GB, ~800GB available)
@@ -25,107 +23,78 @@ Stella deploys **Qwen3-8B**, a dense general-purpose model running via **llama.c
 
 ## Model Specifications
 
-### Qwen3-8B (Q8_0 GGUF)
+### Meta Llama 4 Scout 17B-16E (Q6_K GGUF)
 
-- **Architecture**: Qwen3ForCausalLM (dense)
-- **Parameters**: 8.2B
-- **Size**: 8.1 GiB (Q8_0 GGUF)
-- **Location**: `/mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf`
-- **Context Length**: 32,768 tokens
-- **Quantization**: Q8_0
-- **Engine**: llama.cpp (systemd service)
-- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt processing
-- **Features**: Thinking mode (Qwen3 think/no-think), OpenAI-compatible API
-
----
-
-## vLLM Configuration
-
-### Docker Image
-
-- **Image**: `nvcr.io/nvidia/vllm:25.12-py3`
-- **Source**: NVIDIA Container Registry (requires authentication)
-- **vLLM Version**: 0.11.1+9114fd76.nv25.12
-- **CUDA**: 13.1 (forward compatible with driver 580.95.05)
-- **Release**: December 2025
-
-**Why This Image?**
-- ✅ Official NVIDIA build optimized for GB10
-- ✅ Better MoE support than 25.11 version
-- ✅ Stable safetensors loading for large models
-- ✅ Full tool calling support
+- **Architecture**: Transformer MoE
+- **Parameters**: 109B total / 17B active per token
+- **Experts**: 16 total, 1 active per token
+- **Size**: 83 GiB (Q6_K GGUF, 2 shards)
+- **Location**: `/mnt/models/Llama-4-Scout-17B-16E-Instruct-GGUF/`
+- **Context Length**: 32,768 tokens (model supports up to 10M natively)
+- **Quantization**: Q6_K (Unsloth "Excellent" tier)
+- **Engine**: llama.cpp (build b8006, systemd service)
+- **Performance**: 14.5 tok/s generation, ~62 tok/s prompt processing
+- **Features**: Tool calling, code generation, multilingual, OpenAI-compatible API
+- **License**: Llama 4 Community License
 
 ---
 
 ## Deployment
 
-### Location
-- **Host**: stella.home.arpa (10.0.0.81)
-- **Directory**: `~/vllm-service/`
-- **Container Name**: `qwen-coder`
-- **Port**: 8000
+### Service Configuration
 
-### Current Configuration (204K Context, NFS Storage)
+**systemd unit** (`/etc/systemd/system/llama-server.service`):
+```ini
+[Unit]
+Description=llama-server Llama-4-Scout-17B-16E inference
+After=network-online.target mnt-models.mount
+Requires=mnt-models.mount
+Wants=network-online.target
 
-**Updated (2026-02-04): Model now served from NFS with 204K context**
+[Service]
+Type=simple
+User=llm-agent
+Group=llm-agent
+WorkingDirectory=/home/llm-agent/llama.cpp
+ExecStart=/home/llm-agent/llama.cpp/build/bin/llama-server \
+    -m /mnt/models/Llama-4-Scout-17B-16E-Instruct-GGUF/Llama-4-Scout-17B-16E-Instruct-Q6_K-00001-of-00002.gguf \
+    -ngl 999 \
+    --no-mmap \
+    -fa on \
+    -c 32768 \
+    --jinja \
+    --host 0.0.0.0 \
+    --port 8000
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
 
-**docker-compose.yml** (`~/vllm-service/docker-compose.yml`):
-```yaml
-services:
-  vllm:
-    image: nvcr.io/nvidia/vllm:25.12-py3
-    container_name: qwen-coder
-    privileged: true
-    ipc: host
-    network_mode: host
-    volumes:
-      - /mnt/models:/models:ro
-      - /home/llm-agent/vllm-service/logs:/workspace/logs:rw
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - CUDA_VISIBLE_DEVICES=0
-    command: >
-      vllm serve /models/models--Qwen--Qwen3-Coder-30B-A3B-Instruct/snapshots/b2cff646eb4bb1d68355c01b18ae02e7cf42d120
-      --trust-remote-code
-      --gpu-memory-utilization 0.93
-      --max-model-len 204800
-      --dtype auto
-      --port 8000
-      --host 0.0.0.0
-      --tool-call-parser hermes
-      --enable-auto-tool-choice
-      --disable-sliding-window
-    restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+[Install]
+WantedBy=multi-user.target
 ```
 
-**Key Features**:
-- `restart: unless-stopped`: Auto-restarts on boot and after crashes
-- Model served directly from NFS (`/mnt/models`)
-- 204,800 token context window
-- `--tool-call-parser hermes`: Hermes-format function calling
-- `--enable-auto-tool-choice`: Automatic tool selection
+### Key Flags
+
+| Flag | Purpose |
+|------|---------|
+| `-ngl 999` | All layers on GPU |
+| `--no-mmap` | Critical on GB10 — avoids slow mmap |
+| `-fa on` | Flash attention |
+| `-c 32768` | 32K context window |
+| `--jinja` | Llama 4 chat template |
+| `--host 0.0.0.0` | Listen on all interfaces |
+| `--port 8000` | API port |
+
+**Note**: llama.cpp auto-discovers shard 2 from the shard 1 path.
 
 ### Service Management
 
 ```bash
-# Start service
-cd ~/vllm-service && docker compose up -d
-
-# Stop service
-cd ~/vllm-service && docker compose down
-
-# View logs
-docker logs -f qwen-coder
-
-# Restart service
-cd ~/vllm-service && docker compose restart
+sudo systemctl start llama-server     # Start
+sudo systemctl stop llama-server      # Stop
+sudo systemctl restart llama-server   # Restart
+sudo systemctl status llama-server    # Status
+journalctl -u llama-server -f         # Logs
 ```
 
 ### Prerequisites
@@ -141,28 +110,33 @@ flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noati
 
 ### Current Stats (32K Context)
 
-- **GPU Memory**: 56.9 GiB model + 42.46 GiB KV cache = ~100GB total
-- **KV Cache Capacity**: 463,744 tokens
-- **Max Concurrency**: 14.15x at full context
-- **Loading Time**: ~5.4 minutes (first time)
-- **Attention Backend**: FlashAttention (FLASH_ATTN)
-- **Compilation**: torch.compile enabled (56s compile time)
+| Metric | Value |
+|--------|-------|
+| **Generation Speed** | 14.5 tok/s |
+| **Prompt Processing** | ~62 tok/s |
+| **Model Size** | 83 GiB (Q6_K, 2 shards) |
+| **Active Parameters** | 17B per token (of 109B total) |
+| **Context Window** | 32,768 tokens |
+| **GPU Memory** | ~83.5 GB model + ~44 GB available for KV cache |
 
-### Memory Breakdown
+### Performance Context
 
-| Component | Size |
-|-----------|------|
-| Model Weights | 56.9 GB |
-| KV Cache (32K context) | 42.46 GB |
-| Available for batching | ~28 GB |
-| **Total Used** | ~100 GB / 128 GB |
+Llama 4 Scout uses MoE routing — only 17B of 109B total parameters are active per token:
 
-### Expected Performance (200K Context)
+- **Generation** (14.5 tok/s): Similar to dense 14B models, but drawing from 109B total knowledge
+- **Prompt processing** (~62 tok/s): First-request cold cache; should improve on subsequent requests
+- **Quality**: Significantly more capable than smaller dense models — 109B total parameters
 
-- **GPU Memory**: Model (57GB) + KV cache (~65-70GB) = ~125GB total
-- **Available Memory**: Very limited for batching
-- **Concurrency**: Likely 1-2 requests max
-- **Use Case**: Single-user, long-context analysis
+### Comparison to Other Models Tested on GB10
+
+| Model | Params (active) | Size | Gen Speed |
+|-------|-----------------|------|-----------|
+| Qwen3-8B (dense) | 8B | 8.1 GB Q8_0 | 27.8 tok/s |
+| Qwen2.5-Coder-7B (dense) | 7B | 7.6 GB Q8_0 | 29.4 tok/s |
+| **Llama 4 Scout** (MoE) | **17B of 109B** | **83 GB Q6_K** | **14.5 tok/s** |
+| Granite 4.0 H-Small (hybrid MoE) | 9B of 32B | 34.3 GB Q8_0 | 20.5 tok/s |
+| Qwen3-14B (dense) | 14B | 14.6 GB Q8_0 | 14.7 tok/s |
+| Qwen3-32B (dense) | 32B | 32.4 GB Q8_0 | 6.5 tok/s |
 
 ---
 
@@ -186,37 +160,22 @@ curl http://stella.home.arpa:8000/v1/models | python3 -m json.tool
 curl http://stella.home.arpa:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "model": "Llama-4-Scout-17B-16E-Instruct-Q6_K-00001-of-00002.gguf",
     "messages": [
-      {"role": "user", "content": "Write a Python function to calculate fibonacci numbers"}
+      {"role": "user", "content": "Write a Python function that implements binary search."}
     ],
     "max_tokens": 500,
     "temperature": 0.7
   }' | python3 -m json.tool
 ```
 
-### Code Completion
-
-```bash
-curl http://stella.home.arpa:8000/v1/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-    "prompt": "def fibonacci(n):",
-    "max_tokens": 200,
-    "temperature": 0.2
-  }' | python3 -m json.tool
-```
-
 ### Tool/Function Calling
-
-**Research in Progress** - Format being tested:
 
 ```bash
 curl http://stella.home.arpa:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "model": "Llama-4-Scout-17B-16E-Instruct-Q6_K-00001-of-00002.gguf",
     "messages": [
       {"role": "user", "content": "What is the weather in San Francisco?"}
     ],
@@ -240,187 +199,34 @@ curl http://stella.home.arpa:8000/v1/chat/completions \
   }' | python3 -m json.tool
 ```
 
-**Note**: Qwen models use Hermes function calling format. Testing optimal `tool_choice` values.
-
----
-
-## Deployment Commands
-
-### Start Service
-
-```bash
-# On Stella
-cd ~/vllm-service
-docker compose up -d
-
-# Monitor startup
-docker logs -f qwen-coder
-```
-
-### Stop Service
-
-```bash
-cd ~/vllm-service
-docker compose down
-```
-
-### Restart Service
-
-```bash
-cd ~/vllm-service
-docker compose restart
-```
-
-### Check Status
-
-```bash
-# Container status
-docker ps | grep qwen
-
-# GPU utilization
-nvidia-smi
-
-# API health
-curl http://localhost:8000/health
-```
-
----
-
-## Troubleshooting
-
-### Container Won't Start
-
-```bash
-# Check logs
-docker logs qwen-coder
-
-# Common issues:
-# - Model downloading: Wait 5-10 minutes
-# - Out of memory: Reduce --gpu-memory-utilization to 0.85
-# - CUDA not found: Check nvidia-smi
-```
-
-### API Not Responding
-
-```bash
-# Check if server finished loading
-docker logs qwen-coder | grep "Application startup complete"
-
-# For 200K context, loading takes longer
-# Watch for "Model loading took" message
-```
-
-### Out of Memory (OOM)
-
-If running 200K context causes OOM:
-
-1. Reduce context: Try 131072 (128K) instead
-2. Lower GPU utilization: --gpu-memory-utilization 0.90
-3. Enable sliding window: Remove --disable-sliding-window
-
 ---
 
 ## Comparison to Pegasus
 
-| Feature | Pegasus (GPT-OSS-120B) | Stella (Qwen3-Coder-30B) |
-|---------|------------------------|--------------------------|
-| **Parameters** | 117B | 30B (3B active MoE) |
-| **Model Size** | 130GB | 57GB |
-| **Context** | 131K tokens | 32K (testing 200K+) |
-| **Speed** | 34 tok/s | TBD |
-| **Memory Usage** | 66GB model + 37GB cache | 57GB model + 43GB cache |
-| **Quantization** | MXFP4 | BF16 (unquantized) |
-| **Use Case** | Architecture & Analysis | Code Generation |
-| **Tool Calling** | OpenAI format | Hermes format |
-| **Specialization** | General reasoning | Software development |
+| Feature | Pegasus (GPT-OSS-120B) | Stella (Llama 4 Scout) |
+|---------|------------------------|------------------------|
+| **Parameters** | 117B MoE | 109B total / 17B active MoE |
+| **Architecture** | Transformer MoE | Transformer MoE |
+| **Model Size** | 59 GiB (MXFP4) | 83 GiB (Q6_K) |
+| **Context** | 131K tokens | 32K tokens |
+| **Generation** | 58.8 tok/s | 14.5 tok/s |
+| **Quantization** | MXFP4 | Q6_K |
+| **Use Case** | Architecture & Analysis | General-purpose, code, agents |
+| **Tool Calling** | ✅ OpenAI format | ✅ OpenAI format |
+| **Provider** | OpenAI | Meta |
 
 ---
 
-## Technical Notes
+## Model History
 
-### Why vLLM 0.11.1 Works (vs 0.11.0)
-
-**Issue with 0.11.0**:
-- MoE models would load but API server never started
-- Hung during torch.compile phase
-- Even with `--enforce-eager`, initialization failed
-
-**Fixed in 0.11.1**:
-- Better MoE model support
-- Improved safetensors loading (16 shards loaded successfully)
-- Stable torch.compile for Qwen3MoeForCausalLM
-- Application startup completes properly
-
-### Tool Calling Parser
-
-- **Parser**: `hermes` (specified with `--tool-call-parser hermes`)
-- **Format**: Hermes function calling format (not OpenAI)
-- **Auto-choice**: Enabled with `--enable-auto-tool-choice`
-- **Research needed**: Optimal tool_choice values and response format
-
-### Loading Performance
-
-**First Load** (model download + load):
-```
-- Safetensors shards: 16 total
-- Download time: ~3-5 minutes (18GB)
-- Load time: 5:14 (314 seconds)
-- torch.compile: 56 seconds
-- Total: ~6.5 minutes
-```
-
-**Subsequent Loads** (cached):
-```
-- Download: 0 seconds (cached)
-- Load time: ~5 minutes
-- torch.compile: ~1 minute (cached)
-- Total: ~6 minutes
-```
-
----
-
-## Future Improvements
-
-### Planned
-
-1. **Extended Context Testing**: Validate 200K token configuration
-2. **Performance Benchmarking**: Compare speed vs Pegasus
-3. **Tool Calling Documentation**: Document Hermes format examples
-4. **Model Migration**: Move cache to flashstore NFS
-
-### Potential Optimizations
-
-1. **Quantization**: Consider FP8 or AWQ for 2x memory savings
-2. **Multi-GPU**: Test tensor parallelism (if needed)
-3. **Batch Optimization**: Tune for concurrent requests
-4. **Continuous Batching**: Enable for better throughput
-
----
-
-## Session History
-
-### 2026-01-25: Successful Deployment
-
-**Timeline**:
-- 22:45 - Started with IBM Granite 4.0 H Small (failed - compatibility)
-- 23:01 - Switched to Qwen3-Coder-30B-A3B-Instruct
-- 23:08 - Upgraded to vLLM 25.12 (0.11.1) after 25.11 (0.11.0) failed
-- 23:25 - Model started loading (16 safetensors shards)
-- 23:31 - Model fully loaded, torch.compile completed
-- 23:32 - API server started successfully
-- 23:33 - First successful generation
-
-**Key Learnings**:
-1. NVIDIA official images work perfectly (vs community builds)
-2. vLLM 0.11.1 required for MoE stability on ARM GB10
-3. Hermes parser needed for Qwen tool calling
-4. Safetensors loading works reliably with progress display
-
-### Previous Attempts (Failed)
-
-- **Granite 4.0 H Small**: Loaded but API never started (hybrid MoE issue)
-- **GLM-4.7-Flash-NVFP4**: Library path issues, transformers version conflicts
-- **Custom vLLM builds**: Complex, slow, unreliable
+| Date | Model | Reason |
+|------|-------|--------|
+| 2026-02-13 | **Llama 4 Scout 17B-16E** (109B MoE) | Most capable model, 109B knowledge base |
+| 2026-02-13 | Granite 4.0 H-Small (32B MoE) | Tested — hybrid Mamba prompt processing too slow |
+| 2026-02-13 | Qwen2.5-Coder-7B (dense) | Tested — fast but limited capability |
+| 2026-02-12 | Qwen3-8B (8.2B dense) | Speed optimization (27.8 tok/s) |
+| 2026-02-11 | Qwen3-14B (14.2B dense) | Quality upgrade, llama.cpp migration |
+| 2026-01-25 | Qwen3-Coder-30B-A3B (30B MoE) | Code specialization |
 
 ---
 
@@ -428,19 +234,16 @@ If running 200K context causes OOM:
 
 - **[Quickstart Guide](QUICKSTART.md)** - Quick reference commands
 - **[Status](../../STATUS.md)** - Current system status
-- **[Pegasus Comparison](../pegasus/)** - Compare with GPT-OSS-120B
-
----
+- **[Pegasus](../pegasus/)** - Compare with GPT-OSS-120B
 
 ## References
 
-- **Model**: https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct
-- **vLLM**: https://github.com/vllm-project/vllm
-- **NVIDIA Container**: nvcr.io/nvidia/vllm:25.12-py3
-- **Hermes Format**: https://github.com/NousResearch/Hermes-Function-Calling
+- **Model**: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E
+- **GGUF**: https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF
+- **Llama 4 Announcement**: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
 
 ---
 
-**Status**: ✅ Operational - Ready for testing and optimization
+**Status**: ✅ Operational
 
 For current deployment status, see [../../STATUS.md](../../STATUS.md)

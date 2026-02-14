@@ -1,6 +1,6 @@
 # System Status
 
-**Last Updated**: 2026-02-12
+**Last Updated**: 2026-02-13
 
 ---
 
@@ -21,17 +21,17 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **Role**: Architect & Analyst - Long-context analysis, architecture design
 - **Documentation**: [systems/pegasus/](systems/pegasus/)
 
-### Stella - Qwen3-8B
+### Stella - Llama 4 Scout
 - **Status**: ✅ Operational
 - **API**: http://stella.home.arpa:8000
-- **Model**: Qwen3-8B (8.2B dense, Q8_0, 8.1 GiB)
-- **Model Location**: NFS (`/mnt/models/Qwen3-8B-GGUF/Qwen_Qwen3-8B-Q8_0.gguf`)
-- **Engine**: llama.cpp (build b7999+, CUDA 13.0, SM 12.1)
+- **Model**: Meta Llama 4 Scout 17B-16E (109B total, 17B active MoE, Q6_K, 83 GiB)
+- **Model Location**: NFS (`/mnt/models/Llama-4-Scout-17B-16E-Instruct-GGUF/`)
+- **Engine**: llama.cpp (build b8006, CUDA 13.0, SM 12.1)
 - **Service**: systemd (`llama-server.service`)
-- **Performance**: 27.8 tok/s generation, 2,236 tok/s prompt processing
-- **Context**: 32,768 tokens
-- **Features**: OpenAI-compatible API, thinking mode
-- **Role**: General-purpose inference, fast responses
+- **Performance**: 14.5 tok/s generation, ~62 tok/s prompt processing
+- **Context**: 32,768 tokens (model supports up to 10M natively)
+- **Features**: OpenAI-compatible API, tool calling, MoE (16 experts)
+- **Role**: General-purpose inference, code generation, agents
 - **Documentation**: [systems/stella/](systems/stella/)
 
 ---
@@ -42,15 +42,15 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 |---------|---------|--------|
 | **Hardware** | ASUS Ascent GX10 | Lenovo ThinkStation PGX |
 | **GPU Memory** | 128GB | 128GB (unified ARM) |
-| **Model** | GPT-OSS-120B | Qwen3-8B |
-| **Size** | 117B params, 59 GiB (GGUF) | 8.2B params, 8.1 GiB (Q8_0) |
+| **Model** | GPT-OSS-120B | Llama 4 Scout 17B-16E |
+| **Size** | 117B params, 59 GiB (GGUF) | 109B total / 17B active MoE, 83 GiB (Q6_K) |
 | **Context** | 131K tokens | 32K tokens |
-| **Speed** | 58.8 tok/s | 27.8 tok/s |
-| **Quantization** | MXFP4 (GGUF) | Q8_0 (GGUF) |
+| **Speed** | 58.8 tok/s | 14.5 tok/s |
+| **Quantization** | MXFP4 (GGUF) | Q6_K (GGUF) |
 | **Engine** | llama.cpp (systemd) | llama.cpp (systemd) |
 | **Model Storage** | NFS (flashstore) | NFS (flashstore) |
-| **Use Case** | Deep analysis | General-purpose, fast responses |
-| **Tool Calling** | ✅ Enabled (OpenAI) | OpenAI-compatible API |
+| **Use Case** | Deep analysis | General-purpose, code, agents |
+| **Tool Calling** | ✅ Enabled (OpenAI) | ✅ Enabled (OpenAI) |
 
 ---
 
@@ -76,11 +76,13 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **fstab entry**: `flashstore.home.arpa:/volume1/models /mnt/models nfs4 rw,hard,intr,_netdev,noatime,nofail,... 0 0`
 - **Contents**:
   - `models--openai--gpt-oss-120b`: 130 GB (Pegasus)
-  - `Qwen3-8B-GGUF/`: 8.5 GB (Stella)
+  - `Llama-4-Scout-17B-16E-Instruct-GGUF/`: 83 GB (Stella, active)
+  - `granite-4.0-h-small-GGUF/`: 34.3 GB (available)
+  - `Qwen2.5-Coder-7B-Instruct-GGUF/`: 7.6 GB (available)
+  - `Qwen3-8B-GGUF/`: 8.5 GB (available)
   - `models--Qwen--Qwen3-Coder-30B-A3B-Instruct`: 57 GB (available)
   - `models--Qwen--Qwen3-32B-AWQ`: 19 GB (available)
   - `Qwen3-32B-GGUF/`: 33 GB (available)
-  - `Qwen3-8B-GGUF/`: 8.5 GB (available)
 
 ### Service Management
 
@@ -97,12 +99,18 @@ Models are stored centrally on NFS. Both systems run llama.cpp via systemd.
 - **Firewall**: UFW on all systems
 - **Ports**:
   - Pegasus: 8000 (GPT-OSS-120B API, vLLM)
-  - Stella: 8000 (Qwen3-8B API, llama-server)
+  - Stella: 8000 (Llama 4 Scout API, llama-server)
   - Venus: 8001 (reserved, inactive)
 
 ---
 
 ## 📈 Recent Activity
+
+### 2026-02-13
+- ✅ Stella: Switched model to Meta Llama 4 Scout 17B-16E (109B/17B active MoE, Q6_K, 14.5 tok/s)
+- ✅ Stella: Tested IBM Granite 4.0 H-Small (20.5 tok/s) and Qwen2.5-Coder-7B (29.4 tok/s) during evaluation
+- ✅ Stella: Downloaded Granite 4.0 H-Small, Qwen2.5-Coder-7B, Llama 4 Scout to NFS
+- ✅ Both systems: Added NOPASSWD sudoers for llm-agent (systemctl, service file, journalctl)
 
 ### 2026-02-12
 - ✅ Stella: Switched model from Qwen3-14B to Qwen3-8B (Q8_0, 27.8 tok/s — nearly 2x faster)
@@ -154,7 +162,7 @@ curl http://stella.home.arpa:8000/health
 
 - **System Documentation**: [systems/](systems/)
   - [Pegasus (GPT-OSS-120B)](systems/pegasus/)
-  - [Stella (Qwen3-8B)](systems/stella/)
+  - [Stella (Llama 4 Scout)](systems/stella/)
 - **Deployment Guides**: [docs/deployment/](docs/deployment/)
 - **Network Setup**: [docs/network/](docs/network/)
 - **Archives**: [docs/archive/](docs/archive/)
@@ -165,12 +173,11 @@ curl http://stella.home.arpa:8000/health
 
 ## 🎯 Current Focus
 
-**Completed**: Full llama.cpp migration
+**Completed**: Full llama.cpp migration + Stella model upgrade
 - ✅ Both systems: llama.cpp systemd services with NFS dependency
 - ✅ Pegasus: GPT-OSS-120B at 58.8 tok/s (73% faster than vLLM)
-- ✅ Stella: Qwen3-8B Q8_0 at 27.8 tok/s
+- ✅ Stella: Llama 4 Scout 17B-16E (109B/17B MoE) at 14.5 tok/s with 32K context
 - ✅ Docker removed from both systems — no container overhead
-- ✅ Qwen3 dense family benchmarked on GB10 (8B/14B/32B)
 
 **Next Steps**:
 1. Document tool calling examples for both systems

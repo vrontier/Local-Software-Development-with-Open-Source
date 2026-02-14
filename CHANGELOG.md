@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2026-02-13] - Stella Model Evaluation & Switch to Llama 4 Scout
+
+### Changed
+- **Stella Model Change**: Switched from Qwen3-8B to Meta Llama 4 Scout 17B-16E
+  - Architecture: Transformer MoE (109B total, 17B active, 16 experts)
+  - Generation: 14.5 tok/s (was 27.8 tok/s — slower but significantly more capable)
+  - Prompt processing: ~62 tok/s (cold cache, first request)
+  - Context: 32K tokens (model supports up to 10M natively)
+  - Model size: 83 GiB Q6_K, 2 shards (was 8.1 GiB)
+  - Quantization: Q6_K (Unsloth "Excellent" tier)
+  - Model files: `Llama-4-Scout-17B-16E-Instruct-Q6_K-{00001,00002}-of-00002.gguf`
+  - Source: [unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF](https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF)
+
+### Model Evaluation (same session)
+Tested three models before selecting Scout:
+
+| Model | Params (active) | Size | Gen Speed | Verdict |
+|-------|-----------------|------|-----------|---------|
+| IBM Granite 4.0 H-Small | 32B (9B MoE) | 34.3 GB Q8_0 | 20.5 tok/s | Hybrid Mamba — prompt processing too slow |
+| Qwen2.5-Coder-7B | 7B (dense) | 7.6 GB Q8_0 | 29.4 tok/s | Fast but limited capability |
+| **Llama 4 Scout 17B-16E** | **109B (17B MoE)** | **83 GB Q6_K** | **14.5 tok/s** | **Best quality, good speed for size** |
+
+### Infrastructure
+- Added NOPASSWD sudoers for `llm-agent` on both Pegasus and Stella
+  - `systemctl start/stop/restart/status llama-server`
+  - `systemctl daemon-reload`
+  - `tee /etc/systemd/system/llama-server.service`
+  - `journalctl -u llama-server *`
+
+### Models on NFS (new)
+- `Llama-4-Scout-17B-16E-Instruct-GGUF/`: 83 GB (Stella, active)
+- `granite-4.0-h-small-GGUF/`: 34.3 GB (available)
+- `Qwen2.5-Coder-7B-Instruct-GGUF/`: 7.6 GB (available)
+
+---
+
 ## [2026-02-12] - Stella Model Switch to Qwen3-8B
 
 ### Changed
